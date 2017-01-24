@@ -1,6 +1,8 @@
 <?php
-require_once __DIR__ . '/defined.php';
-require_once MUTIPROC_ROOT_PATH . '/conf/conf.php';
+namespace Src\Space\Phper\Muti;
+if (! defined('PHPER_SPACE_MUTIPROC_MARK')) exit('No direct script access allowed');
+
+use Src\Space\Phper\Muti\Lib\Log;
 
 /**
  * 多进程类
@@ -12,32 +14,11 @@ require_once MUTIPROC_ROOT_PATH . '/conf/conf.php';
  * 
  * 使用时候，只需继承MutiProc类，并覆盖_work()方法
  * 
- * @author Mr.Nobody
+ * @author phper.space
  *
  */
-class MutiProc
+abstract class MutiProc
 {
-
-    /**
-     * 日志级别
-     * @var array
-     */
-    protected static $_LOG_LEVEL_MAP = array(
-        'FATAL' => 1,
-        'ERROR' => 1,
-        'WARNING' => 2,
-        'NOTICE' => 4,
-        'TRACE' => 8,
-        'DEBUG' => 16,
-        'INFO' => 16,
-        'ALL' => 32
-    );
-
-    /**
-     * 当前日志级别
-     * @var int
-     */
-    protected $_logLevel;
 
     /**
      * 最大进程数
@@ -81,15 +62,14 @@ class MutiProc
      */
     public function __construct()
     {
-        global $mutiproc_config;
+        global $phper_space_muti_config;
         
         // 从配置文件初始化 
-        $this->_logLevel        = $mutiproc_config['muti_proc']['log_level'];
-        $this->_maxProcNum      = $mutiproc_config['muti_proc']['max_proc_num'];
-        $this->_maxExcuteTime   = $mutiproc_config['muti_proc']['max_excute_time'];
+        $this->_maxProcNum      = $phper_space_muti_config['muti_proc']['max_proc_num'];
+        $this->_maxExcuteTime   = $phper_space_muti_config['muti_proc']['max_excute_time'];
         
         // 用于上锁的文件
-        self::$_FILE_PATH_LOCK  = MUTIPROC_ROOT_PATH . "/temp/file.lock";
+        self::$_FILE_PATH_LOCK  = PHPER_SPACE_MUTIPROC_PATH . "/temp/file.lock";
     
         // 分配一块共享内存
         $this->_shmid           = shmop_open(ftok(__FILE__, 'p'), "c", 0644, self::$_SHMOP_SIZE);
@@ -229,24 +209,8 @@ class MutiProc
      */
     protected function _logMsg($msg, $level)
     {
-        $logFile = MUTIPROC_ROOT_PATH . '/log/proc.log';
-    
-        if (isset(self::$_LOG_LEVEL_MAP[$this->_logLevel]) &&
-            isset(self::$_LOG_LEVEL_MAP[$level])  &&
-            self::$_LOG_LEVEL_MAP[$this->_logLevel] >= self::$_LOG_LEVEL_MAP[$level]) {
-    
-                $line  = "[" . number_format(microtime(TRUE), 4) . "]";
-                $line .= "[" . getmypid() . "]";
-                $line .= "[" . ($this->_isWorker ? 'worker' : 'master') . "]";
-                $line .= "[{$level}]";
-                $line .= "[{$msg}]";
-                $line .= "\r\n";
-    
-                $fp    = fopen($logFile, 'a');
-                fwrite($fp, $line);
-    
-                echo $line;
-            }
+        $log = Log::getInstance();
+        $log->logMsg($msg, $level);
     }
     
     /**
@@ -388,12 +352,11 @@ class MutiProc
 
     /**
      * work
+     * 实际worker子进程执行的方法，此处为抽象方法，需要子类实现
+     * 
+     * @param string $jobID
      */
-    protected function _work($jobID)
-    {
-        $this->_logMsg(getmypid() . " is working ", 'NOTICE');
-        sleep(1);
-    }
+    abstract protected function _work($jobID);
 
     /**
      * 判断worker是否应该退出
